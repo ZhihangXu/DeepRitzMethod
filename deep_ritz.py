@@ -19,9 +19,9 @@ plt.switch_backend('agg')
 print('ok')
 
 # seeding
-torch.manual_seed(0)
-torch.cuda.manual_seed(0)
-np.random.seed(0)
+# torch.manual_seed(0)
+# torch.cuda.manual_seed(0)
+# np.random.seed(0)
 
 current_path = f'/project/mwang/zxu29/DeepRitzMethod/Results'
 output_dir = current_path 
@@ -34,16 +34,15 @@ print(block)
 
 
 ## problem settings
-# parser = argparse.ArgumentParser(description='PINN to solve the local problem')
-# parser.add_argument('--lr', type=float, default=1e-3,help ='learning rate')
+parser = argparse.ArgumentParser(description='Deep Ritz method to solve the Poisson equation')
+parser.add_argument('--lr', type=float, default=1e-4,help ='learning rate')
 # parser.add_argument('--weight', type=int, default=100, help ='weright of the loss_bd')
 # parser.add_argument('--domain', type = list, default =[0,0.1,0,0.1], help='domain size')
 # parser.add_argument('--epoches', type = int, default= 1000, help = '#epochs to train')
 # parser.add_argument('--hidden_dim', type = int, default=20, help = 'hidden dimension of NN')
 # parser.add_argument('--depth', type = int, default=5, help = 'depth of NN')
-# args = parser.parse_args()
+args = parser.parse_args()
 # print("Epoches {} hidden_dim {} weight {} lr{:4f}".format(args.epoches, args.hidden_dim, args.weight, args.lr))
-
 
 def get_interior_points(N=128,d=2):
     """
@@ -68,6 +67,11 @@ def weights_init(m):
         nn.init.xavier_normal_(m.weight)
         nn.init.constant_(m.bias, 0.0)
 
+def u_exact(x):
+    r = np.sqrt(x[:,0]**2 + x[:,1]**2)
+    theta = np.atan2(x[:,1], x[:,0])
+    return np.sqrt(r) * np.sin(theta/2)
+
 if __name__ == '__main__':
     epochs = 50000
     dim = 10
@@ -78,7 +82,7 @@ if __name__ == '__main__':
     model = Poi_DeepRitzNet(dim,depth).to(device)
     # model.apply(weights_init)
     # criteon = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=3e-3)
+    optimizer = optim.Adam(model.parameters(), lr=args.lr)
     print(model)
 
     # x = torch.cat((xr, xb), dim=0)
@@ -88,19 +92,21 @@ if __name__ == '__main__':
     #     x = torch.cat((x, y), dim=1)
     # # print(x.shape)
 
-    # generate the data set
-    xr = get_interior_points()
-    xb = get_boundary_points()
-    xr.requires_grad_() 
-    # xb.requires_grad()
-    if 2 < dim:
-        y = torch.zeros(xr.shape[0], dim - 2)
-        y_b = torch.zeros(xb.shape[0], dim - 2)
-        xr = torch.cat((xr, y), dim=1)
-        xb = torch.cat((xb, y_b), dim=1)
+    
     # print(x.shape)
     for epoch in range(epochs+1):
-        print(xr.size())
+        # print(xr.size())
+        # print(xr)
+        # generate the data set
+        xr = get_interior_points()
+        xb = get_boundary_points()
+        xr.requires_grad_() 
+        # xb.requires_grad()
+        if 2 < dim:
+            y = torch.zeros(xr.shape[0], dim - 2)
+            y_b = torch.zeros(xb.shape[0], dim - 2)
+            xr = torch.cat((xr, y), dim=1)
+            xb = torch.cat((xb, y_b), dim=1)
         output_r = model(xr)
         output_b = model(xb)
         best_loss, best_epoch = 1000, 0
@@ -135,11 +141,11 @@ if __name__ == '__main__':
         x2 = torch.linspace(-1, 1, 1001)
         X, Y = torch.meshgrid(x1, x2)
         Z = torch.cat((Y.flatten()[:, None], Y.T.flatten()[:, None]), dim=1)
-        # if 2 < m:
-        #     y = torch.zeros(Z.shape[0], m - 2)
-        #     Z = torch.cat((Z, y), dim=1)
-        Z = Z.to(device)
-        pred = model(Z)
+        if 2 < dim:
+            y = torch.zeros(Z.shape[0], dim - 2)
+            Z = torch.cat((Z, y), dim=1)
+        Z_torch = Z.to(device)
+        pred = model(Z_torch)
 
     plt.figure()
     pred = pred.cpu().numpy()
@@ -153,4 +159,18 @@ if __name__ == '__main__':
     plt.colorbar(h, cax=cax)
     fig = plt.gcf()
     fname = output_dir + f'/sol.png'
+    fig.savefig(fname)
+
+    plt.figure()
+    u_ref = u_exact(Z)
+    u_ref = u_ref.reshape(1001, 1001)
+    ax = plt.subplot(1, 1, 1)
+    h = plt.imshow(pred, interpolation='nearest', cmap='rainbow',
+                   extent=[-1, 1, -1, 1],
+                   origin='lower', aspect='auto')
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    plt.colorbar(h, cax=cax)
+    fig = plt.gcf()
+    fname = output_dir + f'/ref_sol.png'
     fig.savefig(fname)

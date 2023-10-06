@@ -15,16 +15,18 @@ class Block(nn.Module):
         super(Block, self).__init__()
         self.L1 = nn.Linear(dim, dim, bias=True)
         self.L2 = nn.Linear(dim, dim, bias=True)
-        self.activation = nn.Tanh()
+        # self.activation = nn.Tanh()
+    
+    def activation(self,x):
+        relu = nn.ReLU(inplace=False)
+        return relu(x**3)
 
     def forward(self, x):
-        # print(x)
-        # l1 = self.L1(x)
-        # print(l1)
-        # a1 = self.activation(l1)
-        # print(a1)
-        # print(a1.size())
-        return self.activation(self.L2(self.activation(self.L1(x)))) + x
+        l1 = self.L1(x)
+        a1 = self.activation(l1)
+        l2 = self.L2(a1)
+        a2 = self.activation(l2)
+        return a2 + x
 
 class Poi_DeepRitzNet(nn.Module):
     """
